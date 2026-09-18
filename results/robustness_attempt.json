@@ -1,0 +1,34 @@
+[
+  {
+    "model": "gcn+temporal_consistency",
+    "lambda_reg": 0.1,
+    "precision": 0.5728155339805825,
+    "recall": 0.4638364779874214,
+    "f1": 0.5125977410947002,
+    "auc_pr": 0.4278219338763004,
+    "confusion_matrix": {
+      "tn": 10328,
+      "fp": 220,
+      "fn": 341,
+      "tp": 295
+    },
+    "n_illicit": 636,
+    "n_licit": 10548
+  },
+  {
+    "model": "gcn+rf_ensemble",
+    "alpha": 0.2,
+    "precision": 0.9835164835164835,
+    "recall": 0.5628930817610063,
+    "f1": 0.716,
+    "auc_pr": 0.6642268147965069,
+    "confusion_matrix": {
+      "tn": 10542,
+      "fp": 6,
+      "fn": 278,
+      "tp": 358
+    },
+    "n_illicit": 636,
+    "n_licit": 10548
+  }
+]

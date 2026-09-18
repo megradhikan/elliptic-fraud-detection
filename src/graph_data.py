@@ -47,6 +47,24 @@ def _mask_for(time_step: torch.Tensor, steps: list[int]) -> torch.Tensor:
     return torch.isin(time_step, steps_t)
 
 
+def symmetrize_edge_index(edge_index: torch.Tensor) -> torch.Tensor:
+    """Add reverse edges, matching standard practice for GCN/GraphSAGE on
+    Elliptic (most published benchmarks treat the transaction graph as
+    undirected for message passing).
+
+    This is also *the* leakage mechanism this project investigates: the raw
+    edgelist already points strictly forward in time (verified empirically —
+    every edge has time_step[src] <= time_step[dst]), so a directed GCN over
+    the raw edges alone could never leak future structure into earlier
+    embeddings. Symmetrizing is what lets information flow backward in time
+    during message passing, which is what makes the standard transductive
+    setup (Phase 3) leaky and worth contrasting with the strict inductive,
+    causally-filtered protocol (Phase 4).
+    """
+    reversed_edges = edge_index.flip(0)
+    return torch.cat([edge_index, reversed_edges], dim=1)
+
+
 if __name__ == "__main__":
     from src.data import load_raw
 
