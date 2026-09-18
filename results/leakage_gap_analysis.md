@@ -6,7 +6,7 @@ Comparison below uses GCN/GraphSAGE at a matched 2-layer depth (the only depth b
 
 | Model | Transductive F1 | Inductive F1 | Shuffled-graph F1 (mean ± std) |
 |---|---|---|---|
-| Baseline (XGBoost) | 0.683 | 0.683 (time-based split; no graph structure involved) | n/a |
+| Baseline (XGBoost) | 0.711 | 0.711 (time-based split; no graph structure involved) | n/a |
 | Baseline (Random Forest) | 0.706 | 0.706 (time-based split; no graph structure involved) | n/a |
 | GCN | 0.549 | 0.526 | 0.176 ± 0.018 |
 | GraphSAGE | 0.292 | 0.314 | — |
