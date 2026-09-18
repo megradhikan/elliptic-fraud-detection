@@ -62,7 +62,7 @@ reaches F1=0.612, the single best plain-GNN number found, still short of the bas
 
 | Model | Precision | Recall | F1 | AUC-PR |
 |---|---|---|---|---|
-| Baseline (XGBoost) | 0.791 | 0.601 | 0.683 | 0.674 |
+| Baseline (XGBoost, tuned — 25-trial optuna sweep) | 0.889 | 0.593 | 0.711 | 0.673 |
 | Baseline (Random Forest) | 0.975 | 0.553 | 0.706 | 0.665 |
 | GCN (transductive) | 0.667 | 0.467 | 0.549 | 0.507 |
 | GraphSAGE (transductive) | — | — | 0.292 | — |
@@ -75,7 +75,7 @@ see `results/error_analysis.md`) — a limitation worth flagging on its own, not
 number to average away._
 
 **Headline finding**: on this dataset, no GNN configuration beats the feature-only
-Random Forest baseline on its own — and the standard transductive-vs-inductive
+baseline on its own (tuned XGBoost, F1=0.711) — and the standard transductive-vs-inductive
 "leakage" story from the literature doesn't apply here at all, because **every edge in
 the raw Elliptic edgelist connects two nodes in the same time step** (0 of 234,355
 cross a time-step boundary, verified directly on the CSVs — see the EDA notebook and
@@ -86,7 +86,8 @@ test turned out to be the edge-shuffle ablation: real transaction topology (F1=0
 clearly outperforms degree-preserving random rewiring (F1=0.176 ± 0.018) — the graph
 structure is carrying genuine signal, it just isn't enough on its own to beat a good
 feature-only model. The one fix that helped was the simplest one: a confidence-weighted
-ensemble of the GNN and the baseline (Phase 5) edges out the standalone baseline.
+ensemble of the GNN and the (untuned) Random Forest baseline (Phase 5) reaches F1=0.716,
+edging out every standalone model including the tuned XGBoost baseline above.
 
 Full writeups: [`results/leakage_gap_analysis.md`](results/leakage_gap_analysis.md)
 (the central Phase 4 finding), [`results/robustness_attempt.md`](results/robustness_attempt.md)
@@ -193,8 +194,9 @@ hyperparameter-search infrastructure beyond a simple `optuna` sweep.
 > question to a degree-preserving edge-shuffle ablation showing real
 > transaction topology does carry genuine signal (F1=0.257 vs. 0.176±0.018
 > for randomly rewired graphs) even though no standalone GNN beat a tuned
-> Random Forest (F1=0.706 vs. 0.612 best GNN); closed most of that gap with
-> a confidence-weighted GNN+baseline ensemble (F1=0.716).
+> baseline (F1=0.711 vs. 0.612 best standalone GNN); a confidence-weighted
+> GNN+baseline ensemble ultimately edged out the standalone baseline too
+> (F1=0.716).
 
 ## License
 
