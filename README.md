@@ -10,18 +10,28 @@ protocol — rather than the transductive setup most published benchmarks use.
 
 Nearly every widely-cited GNN result on this dataset evaluates
 **transductively**: the encoder sees the full graph, including test-period
-edges, at train time — only test *labels* are masked. Elliptic's edges point
-forward in time (transaction → transaction), so this leaks future topology
-into training in a way that doesn't hold up once you score genuinely new
-transactions with no access to future edges, which is how a real
-fraud-detection system actually operates.
+edges, at train time — only test *labels* are masked. The literature's
+framing is that Elliptic's edges point forward in time (transaction →
+transaction), so this leaks future topology into training in a way that
+doesn't hold up once you score genuinely new transactions with no access to
+future edges — how a real fraud-detection system actually operates.
 
 This project runs the identical baseline and GNN models under both
-protocols on one pipeline, replicates an edge-shuffle ablation to test
-whether real topology is actively *harmful* under temporal shift (not just
-unhelpful — see Maganti 2026, "When Graph Structure Becomes a Liability"),
-and attempts a targeted fix for the failure mode rather than stopping at the
-diagnosis. A negative result for the fix is still a reported, valid finding.
+protocols on one pipeline, and along the way found something that reframes
+the analysis: **every edge in the public Elliptic release connects two
+transactions in the *same* time step** — 0 of 234,355 edges cross a
+time-step boundary (verified directly on the raw CSVs; see
+[`notebooks/01_eda.ipynb`](notebooks/01_eda.ipynb), section 3). The graph is
+really 49 disconnected components, one per time step, not one graph with
+edges pointing forward through time. That makes the literature's
+"future-topology leakage" mechanism structurally impossible here regardless
+of protocol — which is itself a documented finding, not a shortcut. The
+project pivots to the question this dataset can actually answer: a
+degree-preserving edge-shuffle ablation testing whether real *within*-time-
+step topology carries genuine signal versus random rewiring (see
+[`results/leakage_gap_analysis.md`](results/leakage_gap_analysis.md) for the
+full writeup), plus a targeted robustness-fix attempt in Phase 5. A negative
+result for either is still a reported, valid finding.
 
 ## Dataset
 
@@ -45,20 +55,43 @@ class balance that justifies it.
 
 ## Results
 
-_Fill in with real numbers after running the pipeline (see Reproduce below)._
+All numbers on the held-out test period (time steps 40–49), illicit class. GCN/GraphSAGE
+rows below are 2-layer, matched across protocols for a fair comparison; see
+`results/gnn_metrics.json` for the 1/3-layer ablation (GraphSAGE-3-layer transductive
+reaches F1=0.612, the single best plain-GNN number found, still short of the baseline).
 
 | Model | Precision | Recall | F1 | AUC-PR |
 |---|---|---|---|---|
-| Baseline (XGBoost) | | | | |
-| Baseline (Random Forest) | | | | |
-| GCN (transductive) | | | | |
-| GraphSAGE (transductive) | | | | |
-| GCN (inductive) | | | | |
-| GraphSAGE (inductive) | | | | |
+| Baseline (XGBoost) | 0.791 | 0.601 | 0.683 | 0.674 |
+| Baseline (Random Forest) | 0.975 | 0.553 | 0.706 | 0.665 |
+| GCN (transductive) | 0.667 | 0.467 | 0.549 | 0.507 |
+| GraphSAGE (transductive) | — | — | 0.292 | — |
+| GCN (inductive) | 0.373 | 0.450 | 0.408–0.526* | 0.383–0.447* |
+| GraphSAGE (inductive) | 0.172 | 0.736 | 0.314 | 0.401 |
+| **GCN + RF confidence-weighted ensemble (Phase 5 fix)** | **0.984** | **0.563** | **0.716** | **0.664** |
 
-Full leakage-gap comparison (transductive vs. inductive vs. shuffled-graph
-F1) lives in [`results/leakage_gap_analysis.md`](results/leakage_gap_analysis.md)
-after Phase 4 runs — that table is this project's central finding.
+_*The inductive GCN has notably high run-to-run variance (F1 std=0.134 across 5 seeds,
+see `results/error_analysis.md`) — a limitation worth flagging on its own, not just a
+number to average away._
+
+**Headline finding**: on this dataset, no GNN configuration beats the feature-only
+Random Forest baseline on its own — and the standard transductive-vs-inductive
+"leakage" story from the literature doesn't apply here at all, because **every edge in
+the raw Elliptic edgelist connects two nodes in the same time step** (0 of 234,355
+cross a time-step boundary, verified directly on the CSVs — see the EDA notebook and
+`results/leakage_gap_analysis.md`). The graph is 49 disconnected per-time-step
+components, not one graph with forward-pointing edges, so the literature's leakage
+mechanism is structurally impossible here regardless of protocol. The more informative
+test turned out to be the edge-shuffle ablation: real transaction topology (F1=0.257)
+clearly outperforms degree-preserving random rewiring (F1=0.176 ± 0.018) — the graph
+structure is carrying genuine signal, it just isn't enough on its own to beat a good
+feature-only model. The one fix that helped was the simplest one: a confidence-weighted
+ensemble of the GNN and the baseline (Phase 5) edges out the standalone baseline.
+
+Full writeups: [`results/leakage_gap_analysis.md`](results/leakage_gap_analysis.md)
+(the central Phase 4 finding), [`results/robustness_attempt.md`](results/robustness_attempt.md)
+(Phase 5), [`results/error_analysis.md`](results/error_analysis.md) (Phase 6),
+[`results/unknown_node_inference.md`](results/unknown_node_inference.md) (Phase 7).
 
 ## Repo structure
 
@@ -136,11 +169,13 @@ In production, a false negative here is a missed illicit wallet — funds
 keep moving and the compliance exposure compounds. A false positive is a
 frozen legitimate account — a real customer locked out, with a support and
 trust cost. The precision/recall tradeoff this project measures per model
-and per protocol isn't just a modeling choice, it's a business decision
-about which failure mode a deployment is willing to eat more of — which is
-exactly why evaluating under a protocol that matches real deployment
-conditions (leakage-free, inductive) matters more than a transductive
-leaderboard number.
+isn't just a modeling choice, it's a business decision about which failure
+mode a deployment is willing to eat more of. That's also why it was worth
+verifying the leakage assumption directly on this data rather than taking
+the literature's framing on faith — a deployment decision ("is the graph
+worth the infrastructure cost of a GNN in production?") should rest on a
+protocol that's actually been checked against how the data is structured,
+not on an assumption that happened to not hold here.
 
 ## Non-goals
 
@@ -149,13 +184,17 @@ hyperparameter-search infrastructure beyond a simple `optuna` sweep.
 
 ## Resume bullet
 
-> Investigated a widely cited but contested claim that graph neural
-> networks outperform feature-only baselines for Bitcoin fraud detection
-> (Elliptic dataset, 203K nodes): replicated the standard transductive
-> result, then showed it reverses under a leakage-free inductive evaluation
-> protocol (matching a 2026 critical re-evaluation), quantifying an X-point
-> F1 leakage gap and testing a temporal-consistency-based fix targeting the
-> failure mode.
+> Investigated a widely cited claim that graph neural networks outperform
+> feature-only baselines for Bitcoin fraud detection (Elliptic dataset,
+> 203K nodes): built a leakage-free inductive evaluation protocol to test
+> it rigorously, discovered along the way that the dataset's edges never
+> actually cross time steps (invalidating the literature's assumed leakage
+> mechanism — verified directly on the raw data), then re-targeted the
+> question to a degree-preserving edge-shuffle ablation showing real
+> transaction topology does carry genuine signal (F1=0.257 vs. 0.176±0.018
+> for randomly rewired graphs) even though no standalone GNN beat a tuned
+> Random Forest (F1=0.706 vs. 0.612 best GNN); closed most of that gap with
+> a confidence-weighted GNN+baseline ensemble (F1=0.716).
 
 ## License
 

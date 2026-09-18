@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.data import Data
 
-from src.graph_data import build_pyg_data
+from src.graph_data import build_pyg_data, symmetrize_edge_index
 from src.metrics import compute_metrics, save_metrics
 from src.models.gcn import GCN
 from src.models.graphsage import GraphSAGE
@@ -103,6 +103,11 @@ def run_transductive_phase3(n_layer_options=(1, 2, 3)):
 
     raw = load_raw()
     data = build_pyg_data(raw)
+    # Standard practice (Weber et al. and most follow-ups): treat the
+    # transaction graph as undirected for message passing. This is what
+    # lets test-period structure leak backward into training — see
+    # graph_data.symmetrize_edge_index and inductive_split.py for the fix.
+    data.edge_index = symmetrize_edge_index(data.edge_index)
     print(f"Graph: {data.num_nodes} nodes, {data.num_edges} edges, "
           f"train/val/test = {int(data.train_mask.sum())}/{int(data.val_mask.sum())}/{int(data.test_mask.sum())}")
 
